@@ -9,6 +9,10 @@ const HEIGHT = 540;
 
 const DATA_FILE = '/data/time_logger_jan-mar-2020.csv';
 
+function millis_to_days(ms) {
+    return Math.floor(ms / 1000 / 60 / 60 / 24);
+}
+
 async function fetchData(url) {
     let resp = await fetch(url);
     return  await resp.text(); 
@@ -30,27 +34,38 @@ function makeCalendarWeeklyGrid(data) {
     let minDate = minFirst[0].end;
     let maxDate = minFirst[minFirst.length - 1].end;
 
-    let totalDays = (maxDate.valueOf() - minDate.valueOf()) / 1000 / 60 / 60 / 24;
+    let totalDays = millis_to_days(maxDate - minDate);
+    let dayOffset = minDate.getDay();
     let totalWeeks = Math.round(totalDays / 7);
 
-    let dayOffset = minDate.getDay();
-    let durations = [];
+    let activities = new Array(totalDays + dayOffset);
+
     let seenDates = new Set();
     for (const activity of minFirst) {
         // Take the end time as the "time point"
-        let endDate = new Date(
-            activity.end.getYear(),
-            activity.end.getMonth(),
-            activity.end.getDate(),
-        );
+        let activityDateStr = activity.end.toLocaleDateString('en-US');
+        let daysSinceStart = millis_to_days(activity.end - minDate);
 
-        if (seenDates.has(endDate)) {
-            durations[seenDates.size + dayOffset] += activity.duration;
+        if (seenDates.has(activityDateStr)) {
+            activities[daysSinceStart + dayOffset].duration += activity.duration;
         } else {
-            seenDates.add(endDate);
-            durations[seenDates.size + dayOffset] = activity.duration;
+            seenDates.add(activityDateStr);
+            activities[daysSinceStart + dayOffset] = {
+                end: activity.end,
+                duration: activity.duration,
+            };
         }
     }
+
+    // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
+    var tooltip = d3.select("body")
+        .append("div")
+        .style("position", "absolute")
+        .style("z-index", "10")
+        .style("visibility", "hidden")
+        .style("background", "#fff")
+        .style('opacity', 0.8)
+        .text("a simple tooltip");
 
     // Display the grid
     const gridMargin = 40;
@@ -64,14 +79,14 @@ function makeCalendarWeeklyGrid(data) {
         .attr('height', HEIGHT)
 
     let colorScale = d3.scaleLinear()
-        .domain(d3.extent(durations))
+        .domain(d3.extent(activities.map(d => d.duration)))
         .interpolate(d => d3.interpolateBlues);
 
     let xScale = d3.scaleLinear()
         .domain([0, totalWeeks])
         .range([0, daySize * totalWeeks]);
     let yScale = d3.scalePoint()
-        .domain(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'])
+        .domain(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', ''])
         .rangeRound([0, daySize * 7]);
 
     let xAxis = d3.axisBottom()
@@ -92,23 +107,31 @@ function makeCalendarWeeklyGrid(data) {
         .call(yAxis);
 
     container.selectAll('.calendar-grid-day')
-        .data(durations)
+        .data(activities)
         .enter().append('rect')
         .attr('class', 'calendar-grid-day')
         .attr('width', dayWidth)
         .attr('height', dayWidth)
         .style('fill', (d, i) => {
             if (d) {
-                return colorScale(d)
+                return colorScale(d.duration);
             } else {
-                return 'green';
+                return 'gray';
             }
         })
         .attr('transform', (_d, i) => {
-            let x = parseInt((i + dayOffset) / 7) * daySize;
-            let y = ((i + dayOffset) % 7) * daySize;
+            let x = parseInt(i / 7) * daySize;
+            let y = (i % 7) * daySize;
             return `translate(${x}, ${y})`;
-        });
+        })
+        .on('mouseover', (d) => {
+            if (d) {
+                tooltip.html(`${d.duration.toFixed(1)}<br>${d.end.toLocaleDateString('en-US')}`);
+                return tooltip.style('visibility', 'visible');
+            }
+        })
+        .on("mousemove", function(){return tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");}) 
+        .on("mouseout", function(){return tooltip.style("visibility", "hidden");});
 }
 
 
@@ -128,62 +151,6 @@ function init() {
             .filter((d) => d.activity == 'Sleep');
         makeCalendarWeeklyGrid(filtered);
     });
-}
-
-function makeDurationBarChart(data) {
-    let width = 960;
-    let height = 540;
-    let barWidth = width / data.length;
-
-    let chart = d3.select('.chart')
-        .attr('width', width)
-        .attr('height', height);
-    
-    let x = d3.scaleOrdinal();
-        // .rangeRound([0, width], 0.1);
-
-    let y = d3.scaleLinear()
-        .domain([0, d3.max(data, (d) => d.duration)])
-        .range([height, 0]);
-
-    // let xAxis = d3.axis
-    //     .scale(x)
-    //     .orient('bottom');
-
-    // let yAxis = d3.axis
-    //     .scale(y)
-    //     .orient('left');
-    
-    // chart.append('g')
-    //     .attr('class', 'x-axis')
-    //     .attr('transform', `translate(0,${height})`)
-    //     .call(xAxis);
-
-    // chart.append('g')
-    //     .attr('class', 'y-axis')
-    //     .call(yAxis);
-
-    chart.selectAll('.bar')
-        .data(data)
-        .enter().append('rect')
-        .attr('class', 'bar')
-        .attr('x', (d) => x(d.activity))
-        .attr('y', (d) => y(d.duration))
-        .attr('height', (d) => height - y(d.duration))
-        .attr('width', x.rangeBand())
-        // .attr('class', 'bar')
-        // .attr('transform', (_d, i) => `translate(${i * barWidth},0)`);
-
-    bar.append('rect')
-        .attr('y', (d) => y(d.duration))
-        .attr('height', (d) => height - y(d.duration))
-        .attr('width', barWidth - 1.0)
-
-    bar.append('text')
-        .attr('x', barWidth / 2.0)
-        .attr('y', (d) => y(d.duration))
-        .attr('dy', '1.0em')
-        .text((d) => d.duration.toFixed(0));
 }
 
 window.onload = init;
