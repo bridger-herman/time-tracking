@@ -7,7 +7,7 @@
 const WIDTH = 960;
 const HEIGHT = 540;
 
-const DATA_FILE = '/data/time_logger_jan-mar-2020.csv';
+const DATA_FILE = '/data/report-15-03-2020.csv';
 
 function millis_to_days(ms) {
     return Math.floor(ms / 1000 / 60 / 60 / 24);
@@ -53,6 +53,7 @@ function makeCalendarWeeklyGrid(data) {
             activities[daysSinceStart + dayOffset] = {
                 end: activity.end,
                 duration: activity.duration,
+                daysSinceStart: daysSinceStart,
             };
         }
     }
@@ -74,6 +75,8 @@ function makeCalendarWeeklyGrid(data) {
     const dayMargin = 10;
     const daySize = dayWidth + dayMargin;
 
+    const tooltipOffset = 15;
+
     let grid = d3.select('#calendar-grid')
         .attr('width', WIDTH)
         .attr('height', HEIGHT)
@@ -82,9 +85,10 @@ function makeCalendarWeeklyGrid(data) {
         .domain(d3.extent(activities.map(d => d.duration)))
         .interpolate(d => d3.interpolateBlues);
 
-    let xScale = d3.scaleLinear()
-        .domain([0, totalWeeks])
+    let xScale = d3.scaleTime()
+        .domain([minDate, maxDate])
         .range([0, daySize * totalWeeks]);
+
     let yScale = d3.scalePoint()
         .domain(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', ''])
         .rangeRound([0, daySize * 7]);
@@ -101,7 +105,7 @@ function makeCalendarWeeklyGrid(data) {
     container.append('g')
         .attr('class', 'axis')
         .attr('transform', `translate(0, ${daySize * 7})`)
-        .call(xAxis);
+        .call(xAxis.ticks(null, "%d"));
     container.append('g')
         .attr('class', 'axis')
         .call(yAxis);
@@ -124,14 +128,20 @@ function makeCalendarWeeklyGrid(data) {
             let y = (i % 7) * daySize;
             return `translate(${x}, ${y})`;
         })
-        .on('mouseover', (d) => {
+        .on('mouseover', (d, i) => {
             if (d) {
-                tooltip.html(`${d.duration.toFixed(1)}<br>${d.end.toLocaleDateString('en-US')}`);
-                return tooltip.style('visibility', 'visible');
+                tooltip.html(`${d.duration.toFixed(1)} Hours<br>${d.end.toLocaleDateString('en-US')}`);
+            } else {
+                tooltip.html(`No data: ${i}`)
             }
+            return tooltip.style('visibility', 'visible');
         })
-        .on("mousemove", function(){return tooltip.style("top", (d3.event.pageY-10)+"px").style("left",(d3.event.pageX+10)+"px");}) 
-        .on("mouseout", function(){return tooltip.style("visibility", "hidden");});
+        .on("mousemove", () => {
+            return tooltip.style("top", (d3.event.pageY-tooltipOffset)+"px").style("left",(d3.event.pageX+tooltipOffset)+"px");
+        }) 
+        .on("mouseout", () => {
+            return tooltip.style("visibility", "hidden");
+        });
 }
 
 
