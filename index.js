@@ -38,6 +38,8 @@ function makeCalendarWeeklyGrid(data) {
     let dayOffset = minDate.getDay();
     let totalWeeks = Math.round(totalDays / 7);
 
+    console.log(minFirst.map((d) => d.end));
+
     let activities = new Array(totalDays + dayOffset);
 
     let seenDates = new Set();
@@ -53,10 +55,13 @@ function makeCalendarWeeklyGrid(data) {
             activities[daysSinceStart + dayOffset] = {
                 end: activity.end,
                 duration: activity.duration,
-                daysSinceStart: daysSinceStart,
+                daysSinceStart: daysSinceStart + dayOffset,
             };
         }
     }
+
+    // Feb 8 and Mar 9 are missing...??
+    console.log(activities.map((d) => d.end));
 
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
     var tooltip = d3.select("body")
