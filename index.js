@@ -11,6 +11,8 @@ const DATA_FILE = '/data/report-30-03-2020.csv';
 
 const MS_PER_DAY = 86400000;
 
+var tooltip = null;
+
 function millisToDays(ms) {
     return Math.floor(ms / MS_PER_DAY);
 }
@@ -81,16 +83,6 @@ function makeCalendarWeeklyGrid(data) {
 
     let activities = new Array(...datesDurations.values());
     let dates = new Array(...datesDurations.keys()).map((d) => new Date(d));
-
-    // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
-    var tooltip = d3.select("body")
-        .append("div")
-        .style("position", "absolute")
-        .style("z-index", "10")
-        .style("visibility", "hidden")
-        .style("background", "#fff")
-        .style('opacity', 0.8)
-        .text("a simple tooltip");
 
     // Display the grid
     const gridMargin = 40;
@@ -173,6 +165,16 @@ function setTitle(t) {
 }
 
 function init() {
+    // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
+    tooltip = d3.select("body")
+        .append("div")
+        .style("position", "absolute")
+        .style("z-index", "10")
+        .style("visibility", "hidden")
+        .style("background", "#fff")
+        .style('opacity', 0.8)
+        .text("a simple tooltip");
+
     fetchData(DATA_FILE).then((dataStr) => {
         let data = d3.csvParse(dataStr, function(d) {
             let start = new Date(d.From);
