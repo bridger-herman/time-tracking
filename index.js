@@ -156,7 +156,7 @@ function makeCalendarWeeklyGrid(data) {
             if (d) {
                 tooltip.html(`${d.toFixed(1)} Hours<br>${dates[i].toLocaleDateString('en-US')}`);
             } else {
-                tooltip.html(`No data: ${i}`)
+                tooltip.html(`No data:<br>${dates[i].toLocaleDateString('en-US')}`)
             }
             return tooltip.style('visibility', 'visible');
         })
@@ -168,6 +168,9 @@ function makeCalendarWeeklyGrid(data) {
         });
 }
 
+function setTitle(t) {
+    document.getElementById('activity-label').innerText = t;
+}
 
 function init() {
     fetchData(DATA_FILE).then((dataStr) => {
@@ -184,8 +187,27 @@ function init() {
             }
         });
 
+        let activityTypes = new Set(data.map((a) => a.activity));
+        activityTypes = new Array(...activityTypes);
+        d3.select('#activity-list')
+            .selectAll('li')
+            .data(activityTypes)
+            .enter().append('li')
+                .append('button')
+                    .text((d, _i) => d)
+                    .on('click', (name) => {
+                        setTitle(name);
+                        let filtered = data
+                            .filter((d) => d.activity == name);
+                        d3.selectAll('.grid-container').remove();
+                        makeCalendarWeeklyGrid(filtered);
+                    });
+
+        // Default to 'Sleep'
+        let dflt = 'Sleep';
+        setTitle(dflt);
         let filtered = data
-            .filter((d) => d.activity == 'Sleep');
+            .filter((d) => d.activity == dflt);
         makeCalendarWeeklyGrid(filtered);
     });
 }
