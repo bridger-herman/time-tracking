@@ -7,10 +7,12 @@
 const WIDTH = 960;
 const HEIGHT = 540;
 
-const DATA_FILE = '/data/report-15-03-2020.csv';
+const DATA_FILE = '/data/report-30-03-2020.csv';
 
-function millis_to_days(ms) {
-    return Math.floor(ms / 1000 / 60 / 60 / 24);
+const MS_PER_DAY = 86400000;
+
+function millisToDays(ms) {
+    return Math.floor(ms / MS_PER_DAY);
 }
 
 async function fetchData(url) {
@@ -30,38 +32,55 @@ function parseDuration(strDur) {
 // date
 function makeCalendarWeeklyGrid(data) {
     // Process the data
-    let minFirst = data.sort((a, b) => a.end - b.end);
-    let minDate = minFirst[0].end;
-    let maxDate = minFirst[minFirst.length - 1].end;
+    let datesInOrder = data.sort((a, b) => a.end - b.end);
+    let minDate = datesInOrder[0].end;
+    let maxDate = datesInOrder[datesInOrder.length - 1].end;
 
-    let totalDays = millis_to_days(maxDate - minDate);
+    let totalDays = millisToDays(maxDate.valueOf() - minDate.valueOf());
     let dayOffset = minDate.getDay();
     let totalWeeks = Math.round(totalDays / 7);
 
-    console.log(minFirst.map((d) => d.end));
+    // Populate all the dates
+    let datesDurations = new Map();
+    let currentDate = new Date(minDate.getFullYear(), minDate.getMonth(), minDate.getDate());
 
-    let activities = new Array(totalDays + dayOffset);
+    // Populate blanks prior to the start date
+    let beginDate = currentDate - dayOffset * MS_PER_DAY;
+    for (let i = 0; i < dayOffset; i++) {
+        datesDurations.set(beginDate.valueOf(), null);
 
-    let seenDates = new Set();
-    for (const activity of minFirst) {
-        // Take the end time as the "time point"
-        let activityDateStr = activity.end.toLocaleDateString('en-US');
-        let daysSinceStart = millis_to_days(activity.end - minDate);
+        // Increment by one day
+        beginDate = new Date(beginDate.valueOf() + MS_PER_DAY);
+        beginDate.setHours(0);
+        beginDate.setMinutes(0);
+    }
+    for (let i = 0; i < totalDays; i++) {
+        datesDurations.set(currentDate.valueOf(), null);
 
-        if (seenDates.has(activityDateStr)) {
-            activities[daysSinceStart + dayOffset].duration += activity.duration;
+        // Increment by one day
+        currentDate = new Date(currentDate.valueOf() + MS_PER_DAY);
+        currentDate.setHours(0);
+        currentDate.setMinutes(0);
+    }
+
+    for (const activity of datesInOrder) {
+        // Take the end time as the "time point" for the activity
+        let endDate = new Date(
+            activity.end.getFullYear(),
+            activity.end.getMonth(),
+            activity.end.getDate(),
+        ).valueOf();
+
+        let currentDuration = datesDurations.get(endDate);
+        if (currentDuration) {
+            datesDurations.set(endDate, currentDuration + activity.duration);
         } else {
-            seenDates.add(activityDateStr);
-            activities[daysSinceStart + dayOffset] = {
-                end: activity.end,
-                duration: activity.duration,
-                daysSinceStart: daysSinceStart + dayOffset,
-            };
+            datesDurations.set(endDate, activity.duration);
         }
     }
 
-    // Feb 8 and Mar 9 are missing...??
-    console.log(activities.map((d) => d.end));
+    let activities = new Array(...datesDurations.values());
+    let dates = new Array(...datesDurations.keys()).map((d) => new Date(d));
 
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
     var tooltip = d3.select("body")
@@ -87,7 +106,7 @@ function makeCalendarWeeklyGrid(data) {
         .attr('height', HEIGHT)
 
     let colorScale = d3.scaleLinear()
-        .domain(d3.extent(activities.map(d => d.duration)))
+        .domain(d3.extent(activities))
         .interpolate(d => d3.interpolateBlues);
 
     let xScale = d3.scaleTime()
@@ -123,7 +142,7 @@ function makeCalendarWeeklyGrid(data) {
         .attr('height', dayWidth)
         .style('fill', (d, i) => {
             if (d) {
-                return colorScale(d.duration);
+                return colorScale(d);
             } else {
                 return 'gray';
             }
@@ -135,7 +154,7 @@ function makeCalendarWeeklyGrid(data) {
         })
         .on('mouseover', (d, i) => {
             if (d) {
-                tooltip.html(`${d.duration.toFixed(1)} Hours<br>${d.end.toLocaleDateString('en-US')}`);
+                tooltip.html(`${d.toFixed(1)} Hours<br>${dates[i].toLocaleDateString('en-US')}`);
             } else {
                 tooltip.html(`No data: ${i}`)
             }
@@ -151,14 +170,17 @@ function makeCalendarWeeklyGrid(data) {
 
 
 function init() {
-    // makeCalendarWeeklyGrid(10, 10);
     fetchData(DATA_FILE).then((dataStr) => {
         let data = d3.csvParse(dataStr, function(d) {
-            return {
-                start: new Date(d.From),
-                end: new Date(d.To),
-                duration: parseDuration(d.Duration),
-                activity: d['Activity type'],
+            let start = new Date(d.From);
+            let end = new Date(d.To);
+            if (!isNaN(start.valueOf()) && !isNaN(end.valueOf())) {
+                return {
+                    start: new Date(d.From),
+                    end: new Date(d.To),
+                    duration: parseDuration(d.Duration),
+                    activity: d['Activity type'],
+                }
             }
         });
 
