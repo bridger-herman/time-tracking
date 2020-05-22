@@ -5,9 +5,9 @@
 // - Weekly bar charts?
 
 const WIDTH = 960;
-const HEIGHT = 540;
+const HEIGHT = 300;
 
-const DATA_FILE = '/data/report-30-03-2020.csv';
+const DATA_FILE = '/data/report-22-05-2020.csv';
 
 const MS_PER_DAY = 86400000;
 
@@ -165,6 +165,11 @@ function setTitle(t) {
 }
 
 function init() {
+    let groups = {
+        'Research': ['Research ABR', 'Research Other', 'Research Physicalization', 'Research'],
+        'Relax': ['Family time', 'Read', 'Entertainment', 'Hang out with friends', 'Recreational Programming'],
+    };
+
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
     tooltip = d3.select("body")
         .append("div")
@@ -188,6 +193,23 @@ function init() {
                 }
             }
         });
+
+        d3.select('#group-list')
+            .selectAll('li')
+            .data(Object.keys(groups))
+            .enter().append('li')
+                .append('button')
+                    .text((d, _i) => d)
+                    .on('click', (name) => {
+                        setTitle(name);
+                        let filtered = data
+                            .filter((d) => {
+                                let activities = groups[name];
+                                return activities.some((act) => d.activity == act);
+                            });
+                        d3.selectAll('.grid-container').remove();
+                        makeCalendarWeeklyGrid(filtered);
+                    });
 
         let activityTypes = new Set(data.map((a) => a.activity));
         activityTypes = new Array(...activityTypes);
