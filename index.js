@@ -4,7 +4,7 @@
 // - Monthly calendar with daily bar charts / pie charts
 // - Weekly bar charts?
 
-const WIDTH = 960;
+const WIDTH = 900;
 const HEIGHT = 300;
 
 const DATA_FILE = '/data/report-22-05-2020.csv';
@@ -160,8 +160,71 @@ function makeCalendarWeeklyGrid(data) {
         });
 }
 
+function makeGroupsLineChart(groups, data) {
+    // Process the data
+    let datesInOrder = data.sort((a, b) => a.end - b.end);
+    let minDate = datesInOrder[0].end;
+    let maxDate = datesInOrder[datesInOrder.length - 1].end;
+
+    let groupNames = Object.keys(groups);
+    let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
+
+    const margin = 20;
+
+    let colors = ['steelblue', 'darkred', 'orange'];
+
+    let chart = d3.select('#groups-chart')
+        .attr('width', WIDTH)
+        .attr('height', HEIGHT)
+
+    let xScale = d3.scaleTime()
+        .domain([minDate, maxDate])
+        .range([margin, WIDTH - margin * 2])
+
+    let yScale = d3.scaleLinear()
+        .domain([0, 12]) // TODO find actual max
+        .range([HEIGHT - margin * 2, 0]);
+
+    chart.append('g')
+        .attr('transform', `translate(0, ${HEIGHT - margin * 2})`)
+        .call(d3.axisBottom(xScale));
+    chart.append('g')
+        .call(d3.axisLeft(yScale))
+        .attr('transform', `translate(${margin}, 0)`);
+
+    for (let i in groupData) {
+        chart.append('g')
+            .selectAll('dot')
+            .data(groupData[i])
+            .enter()
+            .append('circle')
+                .attr('cx', (d) => xScale(d.end))
+                .attr('cy', (d) => yScale(d.duration))
+                .attr('r', 1.5)
+                .style('fill', colors[i])
+    }
+    // let container = grid.append('g')
+    //     .attr('class', 'grid-container')
+    //     .attr('transform', `translate(${gridMargin}, ${gridMargin / 2})`);
+
+    // chart.append('g')
+    //     .attr('class', 'axis')
+    //     .attr('transform', `translate(0, ${HEIGHT - margin * 2})`)
+    //     .call(xAxis.ticks(null, "%d"));
+    // chart.append('g')
+    //     .attr('class', 'axis')
+    //     .call(yAxis);
+}
+
 function setTitle(t) {
     document.getElementById('activity-label').innerText = t;
+}
+
+function getGroupData(groupName, groups, data) {
+    return data.filter((d) => {
+        let activities = groups[groupName];
+        return activities.some((act) => d.activity == act);
+    });
 }
 
 function init() {
@@ -202,11 +265,7 @@ function init() {
                     .text((d, _i) => d)
                     .on('click', (name) => {
                         setTitle(name);
-                        let filtered = data
-                            .filter((d) => {
-                                let activities = groups[name];
-                                return activities.some((act) => d.activity == act);
-                            });
+                        let filtered = getGroupData(name, groups, data);
                         d3.selectAll('.grid-container').remove();
                         makeCalendarWeeklyGrid(filtered);
                     });
@@ -233,6 +292,7 @@ function init() {
         let filtered = data
             .filter((d) => d.activity == dflt);
         makeCalendarWeeklyGrid(filtered);
+        makeGroupsLineChart(groups, data);
     });
 }
 

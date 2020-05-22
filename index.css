@@ -1,3 +1,7 @@
 #calendar-grid .calender-grid-day {
     background-color: black;
 }
+
+.vis-container {
+    display: flex;
+}
