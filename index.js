@@ -30,17 +30,12 @@ function parseDuration(strDur) {
     return hour + min;
 }
 
-// Make a GitHub commit-history style weekly grid from `start` date to `end`
-// date
-function makeCalendarWeeklyGrid(data) {
-    // Process the data
-    let datesInOrder = data.sort((a, b) => a.end - b.end);
+function getDailyDurations(datesInOrder) {
     let minDate = datesInOrder[0].end;
     let maxDate = datesInOrder[datesInOrder.length - 1].end;
 
     let totalDays = millisToDays(maxDate.valueOf() - minDate.valueOf());
     let dayOffset = minDate.getDay();
-    let totalWeeks = Math.round(totalDays / 7);
 
     // Populate all the dates
     let datesDurations = new Map();
@@ -83,6 +78,26 @@ function makeCalendarWeeklyGrid(data) {
 
     let activities = new Array(...datesDurations.values());
     let dates = new Array(...datesDurations.keys()).map((d) => new Date(d));
+
+    return {
+        dates: dates,
+        activities: activities
+    };
+}
+
+// Make a GitHub commit-history style weekly grid from `start` date to `end`
+// date
+function makeCalendarWeeklyGrid(data) {
+    // Process the data
+    let datesInOrder = data.sort((a, b) => a.end - b.end);
+    let minDate = datesInOrder[0].end;
+    let maxDate = datesInOrder[datesInOrder.length - 1].end;
+    let totalDays = millisToDays(maxDate.valueOf() - minDate.valueOf());
+    let totalWeeks = Math.round(totalDays / 7);
+
+    let dailyDurations = getDailyDurations(datesInOrder);
+    let dates = dailyDurations.dates;
+    let activities = dailyDurations.activities;
 
     // Display the grid
     const gridMargin = 40;
@@ -168,6 +183,7 @@ function makeGroupsLineChart(groups, data) {
 
     let groupNames = Object.keys(groups);
     let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
+    let groupDaily = groupData.map((g) => getDailyDurations(g));
 
     const margin = 20;
 
@@ -192,16 +208,16 @@ function makeGroupsLineChart(groups, data) {
         .call(d3.axisLeft(yScale))
         .attr('transform', `translate(${margin}, 0)`);
 
-    for (let i in groupData) {
+    for (let groupIndex in groupDaily) {
         chart.append('g')
             .selectAll('dot')
-            .data(groupData[i])
+            .data(groupDaily[groupIndex])
             .enter()
             .append('circle')
-                .attr('cx', (d) => xScale(d.end))
-                .attr('cy', (d) => yScale(d.duration))
+                .attr('cx', (d, i) => xScale(groupDaily[groupIndex].dates[i]))
+                .attr('cy', (d, i) => yScale(groupDaily[groupIndex].activities[i].duration))
                 .attr('r', 1.5)
-                .style('fill', colors[i])
+                .style('fill', colors[groupIndex])
     }
     // let container = grid.append('g')
     //     .attr('class', 'grid-container')
@@ -229,7 +245,7 @@ function getGroupData(groupName, groups, data) {
 
 function init() {
     let groups = {
-        'Research': ['Research ABR', 'Research Other', 'Research Physicalization', 'Research'],
+        'Work': ['Meeting', 'Research ABR', 'Research Other', 'Research Physicalization', 'Research'],
         'Relax': ['Family time', 'Read', 'Entertainment', 'Hang out with friends', 'Recreational Programming'],
     };
 
