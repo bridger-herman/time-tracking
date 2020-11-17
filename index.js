@@ -4,7 +4,7 @@
 // - Monthly calendar with daily bar charts / pie charts
 // - Weekly bar charts?
 
-const WIDTH = 900;
+const WIDTH = 1800;
 const HEIGHT = 300;
 
 const DATA_FILE = '/data/report-16-11-2020.csv';
@@ -242,6 +242,10 @@ function makeGroupsLineChart(groups, data, colors) {
         .domain([minDate, maxDate])
         .range([margin, WIDTH - margin * 2])
 
+    // Assume the first length is the same as the rest
+    // let columnWidth = ((WIDTH - margin * 2) / groupWeekly[0].length) / groupWeekly.length;
+    let columnWidth = 5;
+
     let allHours = groupWeekly.map((g) => g.map((e) => +e.duration));
     let maxHours = allHours.reduce((wr, wArr) => {
         let hours = wArr.reduce((r, x) => x > r ? x : r, 0);
@@ -251,10 +255,10 @@ function makeGroupsLineChart(groups, data, colors) {
             return wr;
         }
     }, 0);
-    console.log(maxHours);
     let yScale = d3.scaleLinear()
         .domain([0, maxHours])
         .range([HEIGHT - margin * 2, 0]);
+    console.log(yScale(60.6));
 
     chart.append('g')
         .attr('transform', `translate(0, ${HEIGHT - margin * 2})`)
@@ -264,7 +268,7 @@ function makeGroupsLineChart(groups, data, colors) {
         .attr('transform', `translate(${margin}, 0)`);
 
     for (let groupIndex in groupWeekly) {
-        // let group = chart.append('g').attr('class', 'group');
+        let group = chart.append('g').attr('class', 'group');
         // group.selectAll('.dot')
         //     .data(groupDaily[groupIndex])
         //     .enter()
@@ -274,15 +278,26 @@ function makeGroupsLineChart(groups, data, colors) {
         //         .attr('cy', (d, i) => yScale(d.duration))
         //         .attr('r', 1.5)
         //         .style('fill', colors[groupIndex])
-        chart.append('path')
-            .datum(groupWeekly[groupIndex])
-            .attr('fill', 'none')
-            .attr('stroke', colors[groupIndex])
-            .attr('stroke-width', 1.5)
-            .attr('d', d3.line()
-                .x((d) => xScale(d.date))
-                .y((d) => yScale(d.duration))
-            )
+
+        // chart.append('path')
+        //     .datum(groupWeekly[groupIndex])
+        //     .attr('fill', 'none')
+        //     .attr('stroke', colors[groupIndex])
+        //     .attr('stroke-width', 1.5)
+        //     .attr('d', d3.line()
+        //         .x((d) => xScale(d.date))
+        //         .y((d) => yScale(d.duration))
+        //     )
+        group.selectAll('.bar')
+            .data(groupWeekly[groupIndex])
+            .enter()
+            .append('rect')
+                .attr('class', 'bar')
+                .attr('x', (d) => xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2)))
+                .attr('y', (d) => yScale(d.duration))
+                .attr('width', columnWidth)
+                .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
+                .style('fill', colors[groupIndex])
     }
     // let container = grid.append('g')
     //     .attr('class', 'grid-container')
@@ -309,7 +324,7 @@ function getGroupData(groupName, groups, data) {
 }
 
 function init() {
-    let colors = ['steelblue', 'darkred', 'orange'];
+    let colors = ['#B5CDF8', '#CDF8B5', '#F3ECEE'];
     let groups = {
         'Work': [
             'Meeting',
