@@ -7,7 +7,7 @@
 const WIDTH = 900;
 const HEIGHT = 300;
 
-const DATA_FILE = '/data/report-22-05-2020.csv';
+const DATA_FILE = '/data/report-16-11-2020.csv';
 
 const MS_PER_DAY = 86400000;
 
@@ -76,13 +76,20 @@ function getDailyDurations(datesInOrder) {
         }
     }
 
-    let activities = new Array(...datesDurations.values());
+    let durations = new Array(...datesDurations.values());
     let dates = new Array(...datesDurations.keys()).map((d) => new Date(d));
 
-    return {
-        dates: dates,
-        activities: activities
-    };
+    let zipped = [];
+    for (let index in durations) {
+        if (durations[index] != null) {
+            let entry = {
+                duration: durations[index],
+                date: dates[index],
+            };
+            zipped.push(entry);
+        }
+    }
+    return zipped;
 }
 
 // Make a GitHub commit-history style weekly grid from `start` date to `end`
@@ -209,15 +216,25 @@ function makeGroupsLineChart(groups, data) {
         .attr('transform', `translate(${margin}, 0)`);
 
     for (let groupIndex in groupDaily) {
-        chart.append('g')
-            .selectAll('dot')
-            .data(groupDaily[groupIndex])
-            .enter()
-            .append('circle')
-                .attr('cx', (d, i) => xScale(groupDaily[groupIndex].dates[i]))
-                .attr('cy', (d, i) => yScale(groupDaily[groupIndex].activities[i].duration))
-                .attr('r', 1.5)
-                .style('fill', colors[groupIndex])
+        // let group = chart.append('g').attr('class', 'group');
+        // group.selectAll('.dot')
+        //     .data(groupDaily[groupIndex])
+        //     .enter()
+        //     .append('circle')
+        //         .attr('class', 'dot')
+        //         .attr('cx', (d, i) => xScale(d.date))
+        //         .attr('cy', (d, i) => yScale(d.duration))
+        //         .attr('r', 1.5)
+        //         .style('fill', colors[groupIndex])
+        chart.append('path')
+            .datum(groupDaily[groupIndex])
+            .attr('fill', 'none')
+            .attr('stroke', colors[groupIndex])
+            .attr('stroke-width', 1.5)
+            .attr('d', d3.line()
+                .x((d) => xScale(d.date))
+                .y((d) => yScale(d.duration))
+            )
     }
     // let container = grid.append('g')
     //     .attr('class', 'grid-container')
@@ -283,31 +300,31 @@ function init() {
                         setTitle(name);
                         let filtered = getGroupData(name, groups, data);
                         d3.selectAll('.grid-container').remove();
-                        makeCalendarWeeklyGrid(filtered);
+                        // makeCalendarWeeklyGrid(filtered);
                     });
 
-        let activityTypes = new Set(data.map((a) => a.activity));
-        activityTypes = new Array(...activityTypes);
-        d3.select('#activity-list')
-            .selectAll('li')
-            .data(activityTypes)
-            .enter().append('li')
-                .append('button')
-                    .text((d, _i) => d)
-                    .on('click', (name) => {
-                        setTitle(name);
-                        let filtered = data
-                            .filter((d) => d.activity == name);
-                        d3.selectAll('.grid-container').remove();
-                        makeCalendarWeeklyGrid(filtered);
-                    });
+        // let activityTypes = new Set(data.map((a) => a.activity));
+        // activityTypes = new Array(...activityTypes);
+        // d3.select('#activity-list')
+        //     .selectAll('li')
+        //     .data(activityTypes)
+        //     .enter().append('li')
+        //         .append('button')
+        //             .text((d, _i) => d)
+        //             .on('click', (name) => {
+        //                 setTitle(name);
+        //                 let filtered = data
+        //                     .filter((d) => d.activity == name);
+        //                 d3.selectAll('.grid-container').remove();
+        //                 // makeCalendarWeeklyGrid(filtered);
+        //             });
 
         // Default to 'Sleep'
         let dflt = 'Sleep';
         setTitle(dflt);
-        let filtered = data
-            .filter((d) => d.activity == dflt);
-        makeCalendarWeeklyGrid(filtered);
+        // let filtered = data
+        //     .filter((d) => d.activity == dflt);
+        // makeCalendarWeeklyGrid(filtered);
         makeGroupsLineChart(groups, data);
     });
 }
