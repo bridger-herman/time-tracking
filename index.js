@@ -22,6 +22,20 @@ async function fetchData(url) {
     return  await resp.text(); 
 }
 
+// https://weeknumber.net/how-to/javascript
+// Returns the ISO week of the date.
+Date.prototype.getWeek = function() {
+  var date = new Date(this.getTime());
+  date.setHours(0, 0, 0, 0);
+  // Thursday in current week decides the year.
+  date.setDate(date.getDate() + 3 - (date.getDay() + 6) % 7);
+  // January 4 is always in week 1.
+  var week1 = new Date(date.getFullYear(), 0, 4);
+  // Adjust to Thursday in week 1 and count number of weeks from date to week1.
+  return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000
+                        - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
 // Parse a duration (e.g. 01:14) into a floating point value
 function parseDuration(strDur) {
     let parts = strDur.split(':');
@@ -90,6 +104,31 @@ function getDailyDurations(datesInOrder) {
         }
     }
     return zipped;
+}
+
+function getWeeklyDurations(datesInOrder) {
+    let dailyDurations = getDailyDurations(datesInOrder);
+
+    // Condense daily durations to weekly
+    let weekDuration = 0.0;
+    let weekStartDate = dailyDurations[0].date;
+    let currentWeek = weekStartDate.getWeek();
+    let entries = [];
+    for (let element of dailyDurations) {
+        weekDuration += element.duration;
+        let week = element.date.getWeek();
+        if (week > currentWeek) {
+            // It's a new week
+            entries.push({
+                date: weekStartDate,
+                duration: weekDuration,
+            });
+            weekStartDate = element.date;
+            weekDuration = 0.0;
+            currentWeek = week;
+        }
+    }
+    return entries;
 }
 
 // Make a GitHub commit-history style weekly grid from `start` date to `end`
@@ -182,7 +221,7 @@ function makeCalendarWeeklyGrid(data) {
         });
 }
 
-function makeGroupsLineChart(groups, data) {
+function makeGroupsLineChart(groups, data, colors) {
     // Process the data
     let datesInOrder = data.sort((a, b) => a.end - b.end);
     let minDate = datesInOrder[0].end;
@@ -190,11 +229,10 @@ function makeGroupsLineChart(groups, data) {
 
     let groupNames = Object.keys(groups);
     let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
-    let groupDaily = groupData.map((g) => getDailyDurations(g));
+    // let groupDaily = groupData.map((g) => getDailyDurations(g));
+    let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
 
     const margin = 20;
-
-    let colors = ['steelblue', 'darkred', 'orange'];
 
     let chart = d3.select('#groups-chart')
         .attr('width', WIDTH)
@@ -204,8 +242,18 @@ function makeGroupsLineChart(groups, data) {
         .domain([minDate, maxDate])
         .range([margin, WIDTH - margin * 2])
 
+    let allHours = groupWeekly.map((g) => g.map((e) => +e.duration));
+    let maxHours = allHours.reduce((wr, wArr) => {
+        let hours = wArr.reduce((r, x) => x > r ? x : r, 0);
+        if (hours > wr) {
+            return hours;
+        } else {
+            return wr;
+        }
+    }, 0);
+    console.log(maxHours);
     let yScale = d3.scaleLinear()
-        .domain([0, 12]) // TODO find actual max
+        .domain([0, maxHours])
         .range([HEIGHT - margin * 2, 0]);
 
     chart.append('g')
@@ -215,7 +263,7 @@ function makeGroupsLineChart(groups, data) {
         .call(d3.axisLeft(yScale))
         .attr('transform', `translate(${margin}, 0)`);
 
-    for (let groupIndex in groupDaily) {
+    for (let groupIndex in groupWeekly) {
         // let group = chart.append('g').attr('class', 'group');
         // group.selectAll('.dot')
         //     .data(groupDaily[groupIndex])
@@ -227,7 +275,7 @@ function makeGroupsLineChart(groups, data) {
         //         .attr('r', 1.5)
         //         .style('fill', colors[groupIndex])
         chart.append('path')
-            .datum(groupDaily[groupIndex])
+            .datum(groupWeekly[groupIndex])
             .attr('fill', 'none')
             .attr('stroke', colors[groupIndex])
             .attr('stroke-width', 1.5)
@@ -261,9 +309,30 @@ function getGroupData(groupName, groups, data) {
 }
 
 function init() {
+    let colors = ['steelblue', 'darkred', 'orange'];
     let groups = {
-        'Work': ['Meeting', 'Research ABR', 'Research Other', 'Research Physicalization', 'Research'],
-        'Relax': ['Family time', 'Read', 'Entertainment', 'Hang out with friends', 'Recreational Programming'],
+        'Work': [
+            'Meeting',
+            'Research ABR',
+            'Research Other',
+            'Research Physicalization',
+            'Research',
+            'Teaching',
+            'Teaching Prep',
+            'Grading',
+            'Prelim',
+            'IVLab Website',
+            'VIS2020 Prep',
+        ],
+        'Relax': [
+            'Family time',
+            'Read',
+            'Entertainment',
+            'Hang out with friends',
+            'Recreational Programming',
+            'Exercise',
+        ],
+        'Sleep': ['Sleep'],
     };
 
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
@@ -294,38 +363,39 @@ function init() {
             .selectAll('li')
             .data(Object.keys(groups))
             .enter().append('li')
-                .append('button')
+                .append('p')
                     .text((d, _i) => d)
-                    .on('click', (name) => {
-                        setTitle(name);
-                        let filtered = getGroupData(name, groups, data);
-                        d3.selectAll('.grid-container').remove();
-                        // makeCalendarWeeklyGrid(filtered);
-                    });
+                    .style('background-color', (_d, i) => colors[i])
+                    // .on('click', (name) => {
+                    //     setTitle(name);
+                    //     let filtered = getGroupData(name, groups, data);
+                    //     d3.selectAll('.grid-container').remove();
+                    //     // makeCalendarWeeklyGrid(filtered);
+                    // });
 
-        // let activityTypes = new Set(data.map((a) => a.activity));
-        // activityTypes = new Array(...activityTypes);
-        // d3.select('#activity-list')
-        //     .selectAll('li')
-        //     .data(activityTypes)
-        //     .enter().append('li')
-        //         .append('button')
-        //             .text((d, _i) => d)
-        //             .on('click', (name) => {
-        //                 setTitle(name);
-        //                 let filtered = data
-        //                     .filter((d) => d.activity == name);
-        //                 d3.selectAll('.grid-container').remove();
-        //                 // makeCalendarWeeklyGrid(filtered);
-        //             });
+        let activityTypes = new Set(data.map((a) => a.activity));
+        activityTypes = new Array(...activityTypes);
+        d3.select('#activity-list')
+            .selectAll('li')
+            .data(activityTypes)
+            .enter().append('li')
+                .append('p')
+                    .text((d, _i) => d)
+                    // .on('click', (name) => {
+                    //     setTitle(name);
+                    //     let filtered = data
+                    //         .filter((d) => d.activity == name);
+                    //     d3.selectAll('.grid-container').remove();
+                    //     // makeCalendarWeeklyGrid(filtered);
+                    // });
 
         // Default to 'Sleep'
-        let dflt = 'Sleep';
-        setTitle(dflt);
+        // let dflt = 'Sleep';
+        // setTitle(dflt);
         // let filtered = data
         //     .filter((d) => d.activity == dflt);
         // makeCalendarWeeklyGrid(filtered);
-        makeGroupsLineChart(groups, data);
+        makeGroupsLineChart(groups, data, colors);
     });
 }
 
