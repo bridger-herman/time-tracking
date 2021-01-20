@@ -5,7 +5,7 @@
 // - Weekly bar charts?
 
 const WIDTH = 1800;
-const HEIGHT = 300;
+const HEIGHT = 600;
 
 const DATA_FILE = '/data/report-16-11-2020.csv';
 
@@ -112,6 +112,9 @@ function getWeeklyDurations(datesInOrder) {
     // Condense daily durations to weekly
     let weekDuration = 0.0;
     let weekStartDate = dailyDurations[0].date;
+
+    weekStartDate = makeDateMonday(weekStartDate);
+
     let currentWeek = weekStartDate.getWeek();
     let entries = [];
     for (let element of dailyDurations) {
@@ -131,94 +134,59 @@ function getWeeklyDurations(datesInOrder) {
     return entries;
 }
 
-// Make a GitHub commit-history style weekly grid from `start` date to `end`
-// date
-function makeCalendarWeeklyGrid(data) {
-    // Process the data
-    let datesInOrder = data.sort((a, b) => a.end - b.end);
-    let minDate = datesInOrder[0].end;
-    let maxDate = datesInOrder[datesInOrder.length - 1].end;
-    let totalDays = millisToDays(maxDate.valueOf() - minDate.valueOf());
-    let totalWeeks = Math.round(totalDays / 7);
+// Get weekly durations as a [{'group1': 45.5, 'group2': 93.3}]
+function getWeeklyData(datesInOrder, groups) {
+    let startWeek = datesInOrder[0].end.getWeek();
+    let endWeek = datesInOrder[datesInOrder.length - 1].end.getWeek();
 
-    let dailyDurations = getDailyDurations(datesInOrder);
-    let dates = dailyDurations.dates;
-    let activities = dailyDurations.activities;
+    let groupNames = Object.keys(groups);
 
-    // Display the grid
-    const gridMargin = 40;
+    // Populate the blank data
+    let weeklyData = new Array(endWeek + 1);
+    for (let i = 0; i < weeklyData.length; i++) {
+        weeklyData[i] = {
+            'groups': {},
+            'weekStart': Date.now(),
+        };
+        for (const key of groupNames) {
+            weeklyData[i]['groups'][key] = 0.0;
+        }
+    }
 
-    const dayWidth = 20;
-    const dayMargin = 10;
-    const daySize = dayWidth + dayMargin;
+    for (const entry of datesInOrder) {
+        let group = whichGroup(entry.activity, groups);
+        if (group == null) {
+            continue;
+        }
 
-    const tooltipOffset = 15;
+        let week = entry.end.getWeek();
+        let weekStart = makeDateMonday(entry.end);
+        weeklyData[week]['groups'][group] += entry.duration;
+        weeklyData[week]['weekStart'] = weekStart; // Resets this every time even though it's already there after the first one
+    }
 
-    let grid = d3.select('#calendar-grid')
-        .attr('width', WIDTH)
-        .attr('height', HEIGHT)
+    return weeklyData;
+}
 
-    let colorScale = d3.scaleLinear()
-        .domain(d3.extent(activities))
-        .interpolate(d => d3.interpolateBlues);
+function whichGroup(activity, groups) {
+    for (let g in groups) {
+        if (groups[g].find(e => e == activity)) {
+            return g;
+        }
+    }
+    return null;
+}
 
-    let xScale = d3.scaleTime()
-        .domain([minDate, maxDate])
-        .range([0, daySize * totalWeeks]);
-
-    let yScale = d3.scalePoint()
-        .domain(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun', ''])
-        .rangeRound([0, daySize * 7]);
-
-    let xAxis = d3.axisBottom()
-        .scale(xScale);
-    let yAxis = d3.axisLeft()
-        .scale(yScale);
-    
-    let container = grid.append('g')
-        .attr('class', 'grid-container')
-        .attr('transform', `translate(${gridMargin}, ${gridMargin / 2})`);
-
-    container.append('g')
-        .attr('class', 'axis')
-        .attr('transform', `translate(0, ${daySize * 7})`)
-        .call(xAxis.ticks(null, "%d"));
-    container.append('g')
-        .attr('class', 'axis')
-        .call(yAxis);
-
-    container.selectAll('.calendar-grid-day')
-        .data(activities)
-        .enter().append('rect')
-        .attr('class', 'calendar-grid-day')
-        .attr('width', dayWidth)
-        .attr('height', dayWidth)
-        .style('fill', (d, i) => {
-            if (d) {
-                return colorScale(d);
-            } else {
-                return 'gray';
-            }
-        })
-        .attr('transform', (_d, i) => {
-            let x = parseInt(i / 7) * daySize;
-            let y = (i % 7) * daySize;
-            return `translate(${x}, ${y})`;
-        })
-        .on('mouseover', (d, i) => {
-            if (d) {
-                tooltip.html(`${d.toFixed(1)} Hours<br>${dates[i].toLocaleDateString('en-US')}`);
-            } else {
-                tooltip.html(`No data:<br>${dates[i].toLocaleDateString('en-US')}`)
-            }
-            return tooltip.style('visibility', 'visible');
-        })
-        .on("mousemove", () => {
-            return tooltip.style("top", (d3.event.pageY-tooltipOffset)+"px").style("left",(d3.event.pageX+tooltipOffset)+"px");
-        }) 
-        .on("mouseout", () => {
-            return tooltip.style("visibility", "hidden");
-        });
+function makeDateMonday(date) {
+    let d = new Date();
+    d.setFullYear(date.getFullYear());
+    d.setMonth(date.getMonth());
+    d.setDate(date.getDate());
+    // Make sure week starts on a Monday
+    // https://stackoverflow.com/a/11789820
+    let startDayOfWeek = d.getDay();
+    d.setDate(d.getDate() + (1 - startDayOfWeek));
+    return d;
 }
 
 function makeGroupsLineChart(groups, data, colors) {
@@ -227,38 +195,57 @@ function makeGroupsLineChart(groups, data, colors) {
     let minDate = datesInOrder[0].end;
     let maxDate = datesInOrder[datesInOrder.length - 1].end;
 
-    let groupNames = Object.keys(groups);
-    let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
-    // let groupDaily = groupData.map((g) => getDailyDurations(g));
-    let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
+    let weeklyData = getWeeklyData(datesInOrder, groups);
 
-    const margin = 20;
+    // let groupNames = Object.keys(groups);
+    // let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
+    // let groupDaily = groupData.map((g) => getDailyDurations(g));
+    // let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
+
+    const margin = 40;
 
     let chart = d3.select('#groups-chart')
         .attr('width', WIDTH)
         .attr('height', HEIGHT)
 
     let xScale = d3.scaleTime()
-        .domain([minDate, maxDate])
+        .domain([makeDateMonday(minDate), makeDateMonday(maxDate)])
         .range([margin, WIDTH - margin * 2])
 
     // Assume the first length is the same as the rest
     // let columnWidth = ((WIDTH - margin * 2) / groupWeekly[0].length) / groupWeekly.length;
     let columnWidth = 5;
 
-    let allHours = groupWeekly.map((g) => g.map((e) => +e.duration));
-    let maxHours = allHours.reduce((wr, wArr) => {
-        let hours = wArr.reduce((r, x) => x > r ? x : r, 0);
-        if (hours > wr) {
-            return hours;
-        } else {
-            return wr;
+    let allHours = weeklyData.reduce((result, week) => {
+        for (let key in week['groups']) {
+            let weekDuration = week['groups'][key];
+            let maxDuration = result['groups'][key];
+            if (weekDuration > maxDuration) {
+                result['groups'][key] = weekDuration;
+            }
         }
-    }, 0);
+        return result;
+    });
+
+    let maxHours = Object.values(allHours['groups']).reduce((r, x) => +x + r);
+    // let allHours = groupWeekly.map((g) => g.map((e) => +e.duration));
+    // Max Hours for side by side columns
+    // let maxHours = allHours.reduce((wr, wArr) => {
+    //     let hours = wArr.reduce((r, x) => x > r ? x : r, 0);
+    //     if (hours > wr) {
+    //         return hours;
+    //     } else {
+    //         return wr;
+    //     }
+    // }, 0);
+
+    // Individual category maxes
+    // let eachMax = allHours.map((g) => g.reduce((r, x) => x > r ? x : r, 0));
+    // let maxHours = eachMax.reduce((r, x) => +x + r);
+
     let yScale = d3.scaleLinear()
         .domain([0, maxHours])
         .range([HEIGHT - margin * 2, 0]);
-    console.log(yScale(60.6));
 
     chart.append('g')
         .attr('transform', `translate(0, ${HEIGHT - margin * 2})`)
@@ -267,8 +254,63 @@ function makeGroupsLineChart(groups, data, colors) {
         .call(d3.axisLeft(yScale))
         .attr('transform', `translate(${margin}, 0)`);
 
-    for (let groupIndex in groupWeekly) {
-        let group = chart.append('g').attr('class', 'group');
+    // Stacked Column Chart (try 3)
+    let bars = chart.append('g');
+    bars.selectAll('g')
+        .data(weeklyData)
+        .enter().append('g')
+            .attr('class', 'week')
+            // .attr('width', columnWidth)
+            // .attr('height', 10)
+            .attr('transform', (e) => {
+                return `translate(${xScale(e.weekStart)}, 0)`;
+            })
+            .selectAll('rect')
+                .data((g) => g.groups)
+                .append('rect')
+                    .attr('fill', 'blue')
+                    .attr('width', columnWidth)
+                    .attr('height', 10)
+
+    // Stacked Column Chart (try 2)
+    // chart.append('g')
+    //     .selectAll('g')
+    //     .data(weeklyData)
+    //     .enter().append('g')
+    //         .attr('class', 'week')
+    //         .attr('transform', (e) => {
+    //             // console.log(e.weekStart);
+    //             return `translate(${xScale(e.weekStart)}, 0)`
+    //         })
+    //         .selectAll('rect')
+    //             .attr('fill', 'blue')
+    //             .data((d) => d)
+    //             .enter().append('rect')
+    //                 .attr('width', columnWidth)
+    //                 .attr('height', 10)
+    //                 .attr('y', (g) => {
+    //                     console.log(g);
+    //                     return yScale(g['Work']);
+    //                 })
+    //                 .attr('fill', 'green');
+
+    // let prevGroupYMax = 0;
+    // for (let groupIndex in groupWeekly) {
+        // let group = chart.append('g').attr('class', 'group');
+        // Stacked column chart
+        // let thisGroupYMax = yScale(eachMax[groupIndex]);
+        // group.selectAll('.bar')
+        //     .data(groupWeekly[groupIndex])
+        //     .enter()
+        //     .append('rect')
+        //         .attr('class', 'bar')
+        //         .attr('width', columnWidth)
+        //         .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
+        //         .style('fill', colors[groupIndex])
+        //         .attr('transform', (d) => `translate(${xScale(d.date)}, ${prevGroupYMax + yScale(d.duration)})`);
+        // prevGroupYMax += thisGroupYMax;
+
+        // Dots
         // group.selectAll('.dot')
         //     .data(groupDaily[groupIndex])
         //     .enter()
@@ -279,6 +321,7 @@ function makeGroupsLineChart(groups, data, colors) {
         //         .attr('r', 1.5)
         //         .style('fill', colors[groupIndex])
 
+        // Lines
         // chart.append('path')
         //     .datum(groupWeekly[groupIndex])
         //     .attr('fill', 'none')
@@ -288,17 +331,25 @@ function makeGroupsLineChart(groups, data, colors) {
         //         .x((d) => xScale(d.date))
         //         .y((d) => yScale(d.duration))
         //     )
-        group.selectAll('.bar')
-            .data(groupWeekly[groupIndex])
-            .enter()
-            .append('rect')
-                .attr('class', 'bar')
-                .attr('x', (d) => xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2)))
-                .attr('y', (d) => yScale(d.duration))
-                .attr('width', columnWidth)
-                .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
-                .style('fill', colors[groupIndex])
-    }
+
+        // Kinda buggy multi-column chart
+        // group.selectAll('.bar')
+        //     .data(groupWeekly[groupIndex])
+        //     .enter()
+        //     .append('rect')
+        //         .attr('class', 'bar')
+        //         // .attr('x', (d) => xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2)))
+        //         .attr('x', (d, i) => {
+        //             // console.log(`group: ${groupIndex}, index ${i}`);
+        //             // console.log(d.date);
+        //             // console.log(xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2)));
+        //             return xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2));
+        //         })
+        //         .attr('y', (d) => yScale(d.duration))
+        //         .attr('width', columnWidth)
+        //         .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
+        //         .style('fill', colors[groupIndex])
+    // }
     // let container = grid.append('g')
     //     .attr('class', 'grid-container')
     //     .attr('transform', `translate(${gridMargin}, ${gridMargin / 2})`);
@@ -339,15 +390,15 @@ function init() {
             'IVLab Website',
             'VIS2020 Prep',
         ],
-        'Relax': [
-            'Family time',
-            'Read',
-            'Entertainment',
-            'Hang out with friends',
-            'Recreational Programming',
-            'Exercise',
-        ],
-        'Sleep': ['Sleep'],
+    //     'Relax': [
+    //         'Family time',
+    //         'Read',
+    //         'Entertainment',
+    //         'Hang out with friends',
+    //         'Recreational Programming',
+    //         'Exercise',
+    //     ],
+    //     'Sleep': ['Sleep'],
     };
 
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
