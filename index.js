@@ -356,61 +356,8 @@ function makeGroupsLineChart(groups, data, colors) {
         .call(d3.axisLeft(yScale))
         .attr('transform', `translate(${margin}, 0)`);
 
-    // Stacked Column Chart (try 3)
-    // let bars = chart.append('g');
-    // bars.selectAll('g')
-    //     .data(weeklyData)
-    //     .enter().append('g')
-    //         .attr('class', 'week')
-    //         // .attr('width', columnWidth)
-    //         // .attr('height', 10)
-    //         .attr('transform', (e) => {
-    //             return `translate(${xScale(e.weekStart)}, 0)`;
-    //         })
-    //         .selectAll('rect')
-    //             .data((g) => g.groups)
-    //             .append('rect')
-    //                 .attr('fill', 'blue')
-    //                 .attr('width', columnWidth)
-    //                 .attr('height', 10)
-
-    // Stacked Column Chart (try 2)
-    // chart.append('g')
-    //     .selectAll('g')
-    //     .data(weeklyData)
-    //     .enter().append('g')
-    //         .attr('class', 'week')
-    //         .attr('transform', (e) => {
-    //             // console.log(e.weekStart);
-    //             return `translate(${xScale(e.weekStart)}, 0)`
-    //         })
-    //         .selectAll('rect')
-    //             .attr('fill', 'blue')
-    //             .data((d) => d)
-    //             .enter().append('rect')
-    //                 .attr('width', columnWidth)
-    //                 .attr('height', 10)
-    //                 .attr('y', (g) => {
-    //                     console.log(g);
-    //                     return yScale(g['Work']);
-    //                 })
-    //                 .attr('fill', 'green');
-
-    let prevGroupYMax = 0;
     for (let groupIndex in groupDuration) {
         let group = chart.append('g').attr('class', 'group');
-        // Stacked column chart
-        // let thisGroupYMax = yScale(eachMax[groupIndex]);
-        // group.selectAll('.bar')
-        //     .data(groupDuration[groupIndex])
-        //     .enter()
-        //     .append('rect')
-        //         .attr('class', 'bar')
-        //         .attr('width', columnWidth)
-        //         .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
-        //         .style('fill', colors[groupIndex])
-        //         .attr('transform', (d) => `translate(${xScale(d.date)}, ${prevGroupYMax + yScale(d.duration)})`);
-        // prevGroupYMax += thisGroupYMax;
 
         // Lines
         // chart.append('path')
@@ -448,35 +395,7 @@ function makeGroupsLineChart(groups, data, colors) {
                     return tooltip.style("visibility", "hidden");
         });
 
-        // Kinda buggy multi-column chart
-        // group.selectAll('.bar')
-        //     .data(groupDuration[groupIndex])
-        //     .enter()
-        //     .append('rect')
-        //         .attr('class', 'bar')
-        //         // .attr('x', (d) => xScale(d.date) + 2 * columnWidth * (groupIndex / (groupDuration.length / 2)))
-        //         .attr('x', (d, i) => {
-        //             // console.log(`group: ${groupIndex}, index ${i}`);
-        //             // console.log(d.date);
-        //             // console.log(xScale(d.date) + 2 * columnWidth * (groupIndex / (groupDuration.length / 2)));
-        //             return xScale(d.date) + 2 * columnWidth * (groupIndex / (groupDuration.length / 2));
-        //         })
-        //         .attr('y', (d) => yScale(d.duration))
-        //         .attr('width', columnWidth)
-        //         .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
-        //         .style('fill', colors[groupIndex])
     }
-    // let container = grid.append('g')
-    //     .attr('class', 'grid-container')
-    //     .attr('transform', `translate(${gridMargin}, ${gridMargin / 2})`);
-
-    // chart.append('g')
-    //     .attr('class', 'axis')
-    //     .attr('transform', `translate(0, ${HEIGHT - margin * 2})`)
-    //     .call(xAxis.ticks(null, "%d"));
-    // chart.append('g')
-    //     .attr('class', 'axis')
-    //     .call(yAxis);
 }
 
 function setTitle(t) {
