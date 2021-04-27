@@ -7,9 +7,11 @@
 const WIDTH = 1800;
 const HEIGHT = 600;
 
-const DATA_FILE = '/data/report-16-11-2020.csv';
+const DATA_FILE = '/data/report-27-04-2021.csv';
 
 const MS_PER_DAY = 86400000;
+const WEEKS_PER_YEAR = 52;
+const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
 
 var tooltip = null;
 
@@ -34,6 +36,11 @@ Date.prototype.getWeek = function() {
   // Adjust to Thursday in week 1 and count number of weeks from date to week1.
   return 1 + Math.round(((date.getTime() - week1.getTime()) / 86400000
                         - 3 + (week1.getDay() + 6) % 7) / 7);
+}
+
+// https://stackoverflow.com/a/22859920
+Date.prototype.weeksBetween = function(d2) {
+    return Math.round((this - d2) / MS_PER_WEEK);
 }
 
 // Parse a duration (e.g. 01:14) into a floating point value
@@ -108,6 +115,7 @@ function getDailyDurations(datesInOrder) {
 
 function getWeeklyDurations(datesInOrder) {
     let dailyDurations = getDailyDurations(datesInOrder);
+    let startDate = dailyDurations[0].date;
 
     // Condense daily durations to weekly
     let weekDuration = 0.0;
@@ -115,11 +123,13 @@ function getWeeklyDurations(datesInOrder) {
 
     weekStartDate = makeDateMonday(weekStartDate);
 
-    let currentWeek = weekStartDate.getWeek();
+    // let currentWeek = weekStartDate.getWeek();
+    let currentWeek = weekStartDate.weeksBetween(startDate);
     let entries = [];
     for (let element of dailyDurations) {
         weekDuration += element.duration;
-        let week = element.date.getWeek();
+        // let week = element.date.getWeek();
+        let week = element.date.weeksBetween(startDate);
         if (week > currentWeek) {
             // It's a new week
             entries.push({
@@ -136,13 +146,14 @@ function getWeeklyDurations(datesInOrder) {
 
 // Get weekly durations as a [{'group1': 45.5, 'group2': 93.3}]
 function getWeeklyData(datesInOrder, groups) {
-    let startWeek = datesInOrder[0].end.getWeek();
-    let endWeek = datesInOrder[datesInOrder.length - 1].end.getWeek();
+    let start = datesInOrder[0].end;
+    let end = datesInOrder[datesInOrder.length - 1].end;
+    let endWeeksFromStart = end.weeksBetween(start);
 
     let groupNames = Object.keys(groups);
 
     // Populate the blank data
-    let weeklyData = new Array(endWeek + 1);
+    let weeklyData = new Array(endWeeksFromStart + 1);
     for (let i = 0; i < weeklyData.length; i++) {
         weeklyData[i] = {
             'groups': {},
@@ -159,7 +170,7 @@ function getWeeklyData(datesInOrder, groups) {
             continue;
         }
 
-        let week = entry.end.getWeek();
+        let week = entry.end.weeksBetween(start);
         let weekStart = makeDateMonday(entry.end);
         weeklyData[week]['groups'][group] += entry.duration;
         weeklyData[week]['weekStart'] = weekStart; // Resets this every time even though it's already there after the first one
@@ -195,12 +206,15 @@ function makeGroupsLineChart(groups, data, colors) {
     let minDate = datesInOrder[0].end;
     let maxDate = datesInOrder[datesInOrder.length - 1].end;
 
-    let weeklyData = getWeeklyData(datesInOrder, groups);
+    // let weeklyData = getWeeklyData(datesInOrder, groups);
 
-    // let groupNames = Object.keys(groups);
-    // let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
-    // let groupDaily = groupData.map((g) => getDailyDurations(g));
-    // let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
+    let groupNames = Object.keys(groups);
+    let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
+    let groupDaily = groupData.map((g) => getDailyDurations(g));
+    let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
+
+    // let groupDuration = groupDaily;
+    let groupDuration = groupWeekly;
 
     const margin = 40;
 
@@ -216,32 +230,15 @@ function makeGroupsLineChart(groups, data, colors) {
     // let columnWidth = ((WIDTH - margin * 2) / groupWeekly[0].length) / groupWeekly.length;
     let columnWidth = 5;
 
-    let allHours = weeklyData.reduce((result, week) => {
-        for (let key in week['groups']) {
-            let weekDuration = week['groups'][key];
-            let maxDuration = result['groups'][key];
-            if (weekDuration > maxDuration) {
-                result['groups'][key] = weekDuration;
+    // Find the max number of hours per week per group
+    let maxHours = 0;
+    for (const group of groupDuration) {
+        for (const entry of group) {
+            if (entry.duration > maxHours) {
+                maxHours = entry.duration;
             }
         }
-        return result;
-    });
-
-    let maxHours = Object.values(allHours['groups']).reduce((r, x) => +x + r);
-    // let allHours = groupWeekly.map((g) => g.map((e) => +e.duration));
-    // Max Hours for side by side columns
-    // let maxHours = allHours.reduce((wr, wArr) => {
-    //     let hours = wArr.reduce((r, x) => x > r ? x : r, 0);
-    //     if (hours > wr) {
-    //         return hours;
-    //     } else {
-    //         return wr;
-    //     }
-    // }, 0);
-
-    // Individual category maxes
-    // let eachMax = allHours.map((g) => g.reduce((r, x) => x > r ? x : r, 0));
-    // let maxHours = eachMax.reduce((r, x) => +x + r);
+    }
 
     let yScale = d3.scaleLinear()
         .domain([0, maxHours])
@@ -255,22 +252,22 @@ function makeGroupsLineChart(groups, data, colors) {
         .attr('transform', `translate(${margin}, 0)`);
 
     // Stacked Column Chart (try 3)
-    let bars = chart.append('g');
-    bars.selectAll('g')
-        .data(weeklyData)
-        .enter().append('g')
-            .attr('class', 'week')
-            // .attr('width', columnWidth)
-            // .attr('height', 10)
-            .attr('transform', (e) => {
-                return `translate(${xScale(e.weekStart)}, 0)`;
-            })
-            .selectAll('rect')
-                .data((g) => g.groups)
-                .append('rect')
-                    .attr('fill', 'blue')
-                    .attr('width', columnWidth)
-                    .attr('height', 10)
+    // let bars = chart.append('g');
+    // bars.selectAll('g')
+    //     .data(weeklyData)
+    //     .enter().append('g')
+    //         .attr('class', 'week')
+    //         // .attr('width', columnWidth)
+    //         // .attr('height', 10)
+    //         .attr('transform', (e) => {
+    //             return `translate(${xScale(e.weekStart)}, 0)`;
+    //         })
+    //         .selectAll('rect')
+    //             .data((g) => g.groups)
+    //             .append('rect')
+    //                 .attr('fill', 'blue')
+    //                 .attr('width', columnWidth)
+    //                 .attr('height', 10)
 
     // Stacked Column Chart (try 2)
     // chart.append('g')
@@ -294,13 +291,13 @@ function makeGroupsLineChart(groups, data, colors) {
     //                 })
     //                 .attr('fill', 'green');
 
-    // let prevGroupYMax = 0;
-    // for (let groupIndex in groupWeekly) {
-        // let group = chart.append('g').attr('class', 'group');
+    let prevGroupYMax = 0;
+    for (let groupIndex in groupDuration) {
+        let group = chart.append('g').attr('class', 'group');
         // Stacked column chart
         // let thisGroupYMax = yScale(eachMax[groupIndex]);
         // group.selectAll('.bar')
-        //     .data(groupWeekly[groupIndex])
+        //     .data(groupDuration[groupIndex])
         //     .enter()
         //     .append('rect')
         //         .attr('class', 'bar')
@@ -311,45 +308,45 @@ function makeGroupsLineChart(groups, data, colors) {
         // prevGroupYMax += thisGroupYMax;
 
         // Dots
-        // group.selectAll('.dot')
-        //     .data(groupDaily[groupIndex])
-        //     .enter()
-        //     .append('circle')
-        //         .attr('class', 'dot')
-        //         .attr('cx', (d, i) => xScale(d.date))
-        //         .attr('cy', (d, i) => yScale(d.duration))
-        //         .attr('r', 1.5)
-        //         .style('fill', colors[groupIndex])
+        group.selectAll('.dot')
+            .data(groupDuration[groupIndex])
+            .enter()
+            .append('circle')
+                .attr('class', 'dot')
+                .attr('cx', (d, i) => xScale(d.date))
+                .attr('cy', (d, i) => yScale(d.duration))
+                .attr('r', 3.0)
+                .style('fill', colors[groupIndex])
 
         // Lines
-        // chart.append('path')
-        //     .datum(groupWeekly[groupIndex])
-        //     .attr('fill', 'none')
-        //     .attr('stroke', colors[groupIndex])
-        //     .attr('stroke-width', 1.5)
-        //     .attr('d', d3.line()
-        //         .x((d) => xScale(d.date))
-        //         .y((d) => yScale(d.duration))
-        //     )
+        chart.append('path')
+            .datum(groupWeekly[groupIndex])
+            .attr('fill', 'none')
+            .attr('stroke', colors[groupIndex])
+            .attr('stroke-width', 1.5)
+            .attr('d', d3.line()
+                .x((d) => xScale(d.date))
+                .y((d) => yScale(d.duration))
+            )
 
         // Kinda buggy multi-column chart
         // group.selectAll('.bar')
-        //     .data(groupWeekly[groupIndex])
+        //     .data(groupDuration[groupIndex])
         //     .enter()
         //     .append('rect')
         //         .attr('class', 'bar')
-        //         // .attr('x', (d) => xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2)))
+        //         // .attr('x', (d) => xScale(d.date) + 2 * columnWidth * (groupIndex / (groupDuration.length / 2)))
         //         .attr('x', (d, i) => {
         //             // console.log(`group: ${groupIndex}, index ${i}`);
         //             // console.log(d.date);
-        //             // console.log(xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2)));
-        //             return xScale(d.date) + 2 * columnWidth * (groupIndex / (groupWeekly.length / 2));
+        //             // console.log(xScale(d.date) + 2 * columnWidth * (groupIndex / (groupDuration.length / 2)));
+        //             return xScale(d.date) + 2 * columnWidth * (groupIndex / (groupDuration.length / 2));
         //         })
         //         .attr('y', (d) => yScale(d.duration))
         //         .attr('width', columnWidth)
         //         .attr('height', (d) => HEIGHT - margin * 2 - yScale(d.duration))
         //         .style('fill', colors[groupIndex])
-    // }
+    }
     // let container = grid.append('g')
     //     .attr('class', 'grid-container')
     //     .attr('transform', `translate(${gridMargin}, ${gridMargin / 2})`);
@@ -375,7 +372,8 @@ function getGroupData(groupName, groups, data) {
 }
 
 function init() {
-    let colors = ['#B5CDF8', '#CDF8B5', '#F3ECEE'];
+    let colors = ['#189A91', '#4632C4', '#F3ECEE'];
+    // let colors = ['#ff0000', '#00ff00', '#0000ff'];
     let groups = {
         'Work': [
             'Meeting',
@@ -390,15 +388,15 @@ function init() {
             'IVLab Website',
             'VIS2020 Prep',
         ],
-    //     'Relax': [
-    //         'Family time',
-    //         'Read',
-    //         'Entertainment',
-    //         'Hang out with friends',
-    //         'Recreational Programming',
-    //         'Exercise',
-    //     ],
-    //     'Sleep': ['Sleep'],
+        'Relax': [
+            'Family time',
+            'Read',
+            'Entertainment',
+            'Hang out with friends',
+            'Recreational Programming',
+            'Exercise',
+        ],
+        'Sleep': ['Sleep'],
     };
 
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
