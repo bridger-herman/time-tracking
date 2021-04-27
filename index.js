@@ -161,12 +161,13 @@ function getWeeklyData(datesInOrder, groups) {
     // Populate the blank data
     let weeklyData = new Array(endWeeksFromStart + 1);
     for (let i = 0; i < weeklyData.length; i++) {
-        weeklyData[i] = {
-            'groups': {},
-            'weekStart': Date.now(),
-        };
+        weeklyData[i] = [];
         for (const key of groupNames) {
-            weeklyData[i]['groups'][key] = 0.0;
+            weeklyData[i].push({
+                groupName: key,
+                totalDuration: 0.0,
+                weekStart: Date.now(),
+            });
         }
     }
 
@@ -175,11 +176,14 @@ function getWeeklyData(datesInOrder, groups) {
         if (group == null) {
             continue;
         }
+        let groupIndex = Object.keys(groups).indexOf(group);
 
         let week = entry.end.weeksBetween(start);
         let weekStart = makeDateMonday(entry.end);
-        weeklyData[week]['groups'][group] += entry.duration;
-        weeklyData[week]['weekStart'] = weekStart; // Resets this every time even though it's already there after the first one
+        weeklyData[week][groupIndex].totalDuration += entry.duration;
+        weeklyData[week][groupIndex].weekStart = weekStart; // Resets this every time even though it's already there after the first one
+        // weeklyData[week]['groups'][group] += entry.duration;
+        // weeklyData[week]['weekStart'] = weekStart; // Resets this every time even though it's already there after the first one
     }
 
     return weeklyData;
@@ -206,13 +210,108 @@ function makeDateMonday(date) {
     return d;
 }
 
+function makeGroupsStackedBarChart(groups, data, colors) {
+    // Process the data
+    let datesInOrder = data.sort((a, b) => a.end - b.end);
+    let minDate = datesInOrder[0].end;
+    let maxDate = datesInOrder[datesInOrder.length - 1].end;
+
+    let weeklyData = getWeeklyData(datesInOrder, groups);
+    // let groupNames = Object.keys(groups);
+    // let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
+    // let groupDaily = groupData.map((g) => getDailyDurations(g));
+    // let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
+    const margin = 40;
+
+    // Assume the first length is the same as the rest
+    // let columnWidth = ((WIDTH - margin * 2) / groupWeekly[0].length) / groupWeekly.length;
+    let columnWidth = 5;
+
+    // Find the max number of hours per week from ALL groups
+    let maxHours = 0;
+
+    for (const week of weeklyData) {
+        // Sum up the week's durations
+        let weekSum = week.map((w) => w.totalDuration).reduce((r, x) => +x + r);
+        if (weekSum > maxHours) {
+            maxHours = weekSum;
+        }
+    }
+
+    let chart = d3.select('#groups-chart')
+        .attr('width', WIDTH)
+        .attr('height', HEIGHT)
+
+    let xScale = d3.scaleTime()
+        .domain([makeDateMonday(minDate), makeDateMonday(maxDate)])
+        .range([margin, WIDTH - margin * 2])
+
+    let yScale = d3.scaleLinear()
+        .domain([0, maxHours])
+        .range([0, HEIGHT - margin * 2]);
+
+    let yScaleAxis = d3.scaleLinear()
+        .domain([0, maxHours])
+        .range([HEIGHT - margin * 2, 0]);
+
+    chart.append('g')
+        .attr('transform', `translate(0, ${HEIGHT - margin * 2})`)
+        .call(d3.axisBottom(xScale));
+    chart.append('g')
+        .call(d3.axisLeft(yScaleAxis))
+        .attr('transform', `translate(${margin}, 0)`);
+
+    chart.append('g')
+        .selectAll('g')
+        .data(weeklyData)
+        .enter().append('g')
+            .selectAll('rect')
+            .data((d, i) => {
+                return d;
+            })
+            .enter().append('rect')
+                .attr('fill', (d, i) => {
+                    return colors[i];
+                })
+                .attr('width', 10)
+                .attr('height', (d, i) => {
+                    return yScale(d.totalDuration);
+                })
+                .attr('x', (d, i) => xScale(d.weekStart))
+                .attr('y', (d, i, a) => {
+                    // If it's the first one, put it at the chart bottom
+                    let thisHeight = a[i].height.baseVal.value;
+                    if (i == 0) {
+                        return HEIGHT - margin * 2 - thisHeight;
+                    }
+                    else {
+                        // Otherwise, put it on top of the previous one
+                        let previousY = a[i-1].y.baseVal.value;
+                        return previousY - thisHeight;
+                    }
+                })
+                .on('mouseover', (d, i) => {
+                    let week = d.weekStart.toLocaleString('en-US', TIME_OPTIONS);
+                    let hours = d.totalDuration;
+                    let groupName = d.groupName;
+                    let text = `<p>${groupName}</p>\n<p>${week}</p>\n<p><strong>${hours.toFixed(1)} hours</strong></p>`;
+                    tooltip.html(text);
+                    tooltip.style('visibility', 'visible');
+                })
+                .on("mousemove", () => {
+                    return tooltip.style("top", (d3.event.pageY-tooltipOffset)+"px").style("left",(d3.event.pageX+tooltipOffset)+"px");
+                }) 
+                .on("mouseout", () => {
+                    return tooltip.style("visibility", "hidden");
+                });
+}
+
 function makeGroupsLineChart(groups, data, colors) {
     // Process the data
     let datesInOrder = data.sort((a, b) => a.end - b.end);
     let minDate = datesInOrder[0].end;
     let maxDate = datesInOrder[datesInOrder.length - 1].end;
 
-    // let weeklyData = getWeeklyData(datesInOrder, groups);
 
     let groupNames = Object.keys(groups);
     let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
@@ -491,7 +590,8 @@ function init() {
         // let filtered = data
         //     .filter((d) => d.activity == dflt);
         // makeCalendarWeeklyGrid(filtered);
-        makeGroupsLineChart(groups, data, colors);
+        // makeGroupsLineChart(groups, data, colors);
+        makeGroupsStackedBarChart(groups, data, colors);
     });
 }
 
