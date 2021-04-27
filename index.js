@@ -217,15 +217,13 @@ function makeGroupsStackedBarChart(groups, data, colors) {
     let maxDate = datesInOrder[datesInOrder.length - 1].end;
 
     let weeklyData = getWeeklyData(datesInOrder, groups);
-    // let groupNames = Object.keys(groups);
-    // let groupData = groupNames.map((g, i) => getGroupData(g, groups, data));
-    // let groupDaily = groupData.map((g) => getDailyDurations(g));
-    // let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
-    const margin = 40;
+
 
     // Assume the first length is the same as the rest
-    // let columnWidth = ((WIDTH - margin * 2) / groupWeekly[0].length) / groupWeekly.length;
-    let columnWidth = 5;
+    const margin = 40;
+    const barMarginPercent = 0.1;
+    let columnWidth = (WIDTH - margin * 2) / weeklyData.length;
+    columnWidth -= columnWidth * barMarginPercent;
 
     // Find the max number of hours per week from ALL groups
     let maxHours = 0;
@@ -273,7 +271,7 @@ function makeGroupsStackedBarChart(groups, data, colors) {
                 .attr('fill', (d, i) => {
                     return colors[i];
                 })
-                .attr('width', 10)
+                .attr('width', columnWidth)
                 .attr('height', (d, i) => {
                     return yScale(d.totalDuration);
                 })
