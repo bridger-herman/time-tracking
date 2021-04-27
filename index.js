@@ -12,6 +12,12 @@ const DATA_FILE = '/data/report-27-04-2021.csv';
 const MS_PER_DAY = 86400000;
 const WEEKS_PER_YEAR = 52;
 const MS_PER_WEEK = 7 * 24 * 60 * 60 * 1000;
+const TIME_OPTIONS = {
+    // weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+};
+const tooltipOffset = 15;
 
 var tooltip = null;
 
@@ -213,8 +219,8 @@ function makeGroupsLineChart(groups, data, colors) {
     let groupDaily = groupData.map((g) => getDailyDurations(g));
     let groupWeekly = groupData.map((g) => getWeeklyDurations(g));
 
-    // let groupDuration = groupDaily;
-    let groupDuration = groupWeekly;
+    let groupDuration = groupDaily;
+    // let groupDuration = groupWeekly;
 
     const margin = 40;
 
@@ -307,6 +313,17 @@ function makeGroupsLineChart(groups, data, colors) {
         //         .attr('transform', (d) => `translate(${xScale(d.date)}, ${prevGroupYMax + yScale(d.duration)})`);
         // prevGroupYMax += thisGroupYMax;
 
+        // Lines
+        // chart.append('path')
+        //     .datum(groupDuration[groupIndex])
+        //     .attr('fill', 'none')
+        //     .attr('stroke', colors[groupIndex])
+        //     .attr('stroke-width', 1.5)
+        //     .attr('d', d3.line()
+        //         .x((d) => xScale(d.date))
+        //         .y((d) => yScale(d.duration))
+        //     )
+
         // Dots
         group.selectAll('.dot')
             .data(groupDuration[groupIndex])
@@ -317,17 +334,20 @@ function makeGroupsLineChart(groups, data, colors) {
                 .attr('cy', (d, i) => yScale(d.duration))
                 .attr('r', 3.0)
                 .style('fill', colors[groupIndex])
-
-        // Lines
-        chart.append('path')
-            .datum(groupWeekly[groupIndex])
-            .attr('fill', 'none')
-            .attr('stroke', colors[groupIndex])
-            .attr('stroke-width', 1.5)
-            .attr('d', d3.line()
-                .x((d) => xScale(d.date))
-                .y((d) => yScale(d.duration))
-            )
+                .on('mouseover', (d, i) => {
+                    let week = d.date.toLocaleString('en-US', TIME_OPTIONS);
+                    let hours = d.duration;
+                    let groupName = groupNames[groupIndex];
+                    let text = `<p>${groupName}</p>\n<p>${week}</p>\n<p><strong>${hours.toFixed(1)} hours</strong></p>`;
+                    tooltip.html(text);
+                    tooltip.style('visibility', 'visible');
+                })
+                .on("mousemove", () => {
+                    return tooltip.style("top", (d3.event.pageY-tooltipOffset)+"px").style("left",(d3.event.pageX+tooltipOffset)+"px");
+                }) 
+                .on("mouseout", () => {
+                    return tooltip.style("visibility", "hidden");
+        });
 
         // Kinda buggy multi-column chart
         // group.selectAll('.bar')
@@ -372,7 +392,7 @@ function getGroupData(groupName, groups, data) {
 }
 
 function init() {
-    let colors = ['#189A91', '#4632C4', '#F3ECEE'];
+    let colors = ['#189A91', '#4632C4', '#D6BDA8', '#E1F0D1', '#D7D9F9', '#F3ECEE'];
     // let colors = ['#ff0000', '#00ff00', '#0000ff'];
     let groups = {
         'Work': [
@@ -380,6 +400,7 @@ function init() {
             'Research ABR',
             'Research Other',
             'Research Physicalization',
+            'Research Planetarium',
             'Research',
             'Teaching',
             'Teaching Prep',
@@ -394,8 +415,19 @@ function init() {
             'Entertainment',
             'Hang out with friends',
             'Recreational Programming',
-            'Exercise',
         ],
+        'Exercise': [
+            'Exercise',
+            'Walk'
+        ],
+        'Housework': [
+            'Housework',
+            'Make Food',
+            'Shop',
+            'Appointment',
+            'Budgeting'
+        ],
+        'Music': ['Music'],
         'Sleep': ['Sleep'],
     };
 
