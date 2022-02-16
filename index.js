@@ -21,6 +21,53 @@ const tooltipOffset = 15;
 
 var tooltip = null;
 
+export const groups = {
+    'Teaching': [
+        'Teaching',
+        'Teaching Prep',
+        'Grading',
+    ],
+    'Dissertation': [
+        'Research Dissertation',
+        'Proposal',
+        'Research Physicalization',
+    ],
+    'Financial Responsibility': [
+        'Budgeting',
+    ],
+    'Professional Development': [
+        'Time Management'
+    ],
+    'Research + Publication': [
+        'Meeting',
+        'Research ABR',
+        'Research Other',
+        'Research Planetarium',
+        'Research',
+        'Prelim',
+        'IVLab Website',
+        'VIS2020 Prep',
+        'Email'
+    ],
+    'Life + Balance': [
+        'Family time',
+        'Read',
+        'Entertainment',
+        'Hang out with friends',
+        'Recreational Programming',
+        'Exercise',
+        'Walk',
+        'Eat',
+        'Housework',
+        'Make Food',
+        'Shop',
+        'Appointment',
+    ],
+    'MBI': ['Volunteer'],
+    'Sleep': ['Sleep'],
+};
+
+
 function millisToDays(ms) {
     return Math.floor(ms / MS_PER_DAY);
 }
@@ -50,7 +97,7 @@ Date.prototype.weeksBetween = function(d2) {
 }
 
 // Parse a duration (e.g. 01:14) into a floating point value
-function parseDuration(strDur) {
+export function parseDuration(strDur) {
     let parts = strDur.split(':');
     let hour = +parts[0];
     let min = (+parts[1]) / 60;
@@ -410,43 +457,6 @@ function getGroupData(groupName, groups, data) {
 function init() {
     let colors = ['#189A91', '#4632C4', '#D6BDA8', '#E1F0D1', '#D7D9F9', '#F3ECEE'];
     // let colors = ['#ff0000', '#00ff00', '#0000ff'];
-    let groups = {
-        'Work': [
-            'Meeting',
-            'Research ABR',
-            'Research Other',
-            'Research Physicalization',
-            'Research Planetarium',
-            'Research',
-            'Teaching',
-            'Teaching Prep',
-            'Grading',
-            'Prelim',
-            'IVLab Website',
-            'VIS2020 Prep',
-        ],
-        'Relax': [
-            'Family time',
-            'Read',
-            'Entertainment',
-            'Hang out with friends',
-            'Recreational Programming',
-        ],
-        'Exercise': [
-            'Exercise',
-            'Walk'
-        ],
-        'Housework': [
-            'Housework',
-            'Make Food',
-            'Shop',
-            'Appointment',
-            'Budgeting'
-        ],
-        'Music': ['Music'],
-        'Sleep': ['Sleep'],
-    };
-
     // https://chartio.com/resources/tutorials/how-to-show-data-on-mouseover-in-d3js/
     tooltip = d3.select("body")
         .append("div")
